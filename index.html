@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
+
+<!-- iOS PWA -->
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Jarvis" />
+<meta name="theme-color" content="#0a0a0b" />
+
+<!-- Inline SVG icon for home screen -->
+<link rel="apple-touch-icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'><rect width='180' height='180' rx='40' fill='%230a0a0b'/><circle cx='90' cy='90' r='38' fill='none' stroke='%23d4ff3a' stroke-width='3'/><circle cx='90' cy='90' r='8' fill='%23d4ff3a'/><text x='90' y='150' font-family='serif' font-size='22' font-style='italic' fill='%23f5f3ed' text-anchor='middle'>j</text></svg>" />
+<link rel="manifest" href="manifest.json" />
+
+<title>Jarvis</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@300;400;500;600&display=swap" rel="stylesheet" />
+
+<style>
+  :root {
+    --bg: #0a0a0b;
+    --bg-elev: #14141a;
+    --bg-elev-2: #1c1c24;
+    --border: #2a2a32;
+    --border-strong: #3a3a44;
+    --fg: #f5f3ed;
+    --fg-muted: #8a8a92;
+    --fg-faint: #54545c;
+    --accent: #d4ff3a;
+    --accent-glow: #d4ff3a40;
+    --danger: #ff5a5a;
+    --user-bubble: #1a1a22;
+    --serif: 'Instrument Serif', Georgia, serif;
+    --mono: 'JetBrains Mono', ui-monospace, monospace;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--mono);
+    font-size: 14px;
+    line-height: 1.5;
+    overscroll-behavior: none;
+    -webkit-font-smoothing: antialiased;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    /* Subtle radial atmosphere behind everything */
+    background:
+      radial-gradient(ellipse 60% 50% at 50% 100%, rgba(212, 255, 58, 0.06), transparent 60%),
+      radial-gradient(ellipse 80% 60% at 50% 0%, rgba(212, 255, 58, 0.02), transparent 70%),
+      var(--bg);
+    /* Account for iPad safe areas in PWA mode */
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+
+  .app {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    height: 100dvh;
+    max-width: 720px;
+    margin: 0 auto;
+    position: relative;
+  }
+
+  /* ──── Header ─────────────────────────────────────── */
+  header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    padding: 24px 24px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .wordmark {
+    font-family: var(--serif);
+    font-style: italic;
+    font-size: 32px;
+    font-weight: 400;
+    letter-spacing: -0.02em;
+    color: var(--fg);
+  }
+
+  .wordmark::before {
+    content: '— ';
+    color: var(--accent);
+    font-style: normal;
+  }
+
+  .header-meta {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--fg-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .icon-btn {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--fg-muted);
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.18s ease;
+    font-family: var(--mono);
+    font-size: 14px;
+  }
+  .icon-btn:hover, .icon-btn:active {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  /* ──── Conversation ───────────────────────────────── */
+  .conversation {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    scroll-behavior: smooth;
+  }
+  .conversation::-webkit-scrollbar { width: 4px; }
+  .conversation::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .empty-state {
+    margin: auto;
+    text-align: center;
+    color: var(--fg-faint);
+    max-width: 280px;
+  }
+  .empty-state .glyph {
+    font-family: var(--serif);
+    font-style: italic;
+    font-size: 64px;
+    color: var(--fg-faint);
+    line-height: 1;
+    margin-bottom: 16px;
+  }
+  .empty-state p {
+    font-size: 13px;
+    line-height: 1.6;
+  }
+
+  .message {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-width: 85%;
+    animation: msg-in 0.32s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  @keyframes msg-in {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .message.user { align-self: flex-end; align-items: flex-end; }
+  .message.assistant { align-self: flex-start; }
+
+  .message .label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    color: var(--fg-faint);
+  }
+  .message .label::before { content: '◦ '; color: var(--accent); }
+  .message.user .label::before { color: var(--fg-muted); }
+
+  .bubble {
+    padding: 12px 16px;
+    border-radius: 4px;
+    font-family: var(--mono);
+    font-size: 14px;
+    line-height: 1.55;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+  }
+  .message.user .bubble {
+    background: var(--user-bubble);
+    border: 1px solid var(--border);
+    color: var(--fg);
+  }
+  .message.assistant .bubble {
+    background: transparent;
+    border: 1px solid var(--border);
+    border-left: 2px solid var(--accent);
+    color: var(--fg);
+  }
+
+  .thinking {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--fg-muted);
+    font-size: 13px;
+  }
+  .thinking .dot {
+    display: inline-block;
+    width: 4px; height: 4px;
+    background: var(--accent);
+    border-radius: 50%;
+    animation: dot-pulse 1.2s infinite ease-in-out;
+  }
+  .thinking .dot:nth-child(2) { animation-delay: 0.15s; }
+  .thinking .dot:nth-child(3) { animation-delay: 0.3s; }
+  @keyframes dot-pulse {
+    0%, 60%, 100% { opacity: 0.2; transform: scale(0.8); }
+    30% { opacity: 1; transform: scale(1); }
+  }
+
+  /* ──── Mic / Control bar ──────────────────────────── */
+  .controls {
+    border-top: 1px solid var(--border);
+    padding: 18px 24px 28px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .status-line {
+    min-height: 18px;
+    font-size: 12px;
+    color: var(--fg-muted);
+    text-align: center;
+    letter-spacing: 0.04em;
+    padding: 0 12px;
+    max-width: 100%;
+  }
+  .status-line.live { color: var(--accent); }
+  .status-line.error { color: var(--danger); }
+
+  .mic-wrap {
+    position: relative;
+    width: 84px;
+    height: 84px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .mic-pulse {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    border: 2px solid var(--accent);
+    opacity: 0;
+    pointer-events: none;
+  }
+  .listening .mic-pulse {
+    animation: pulse 1.4s infinite ease-out;
+  }
+  .listening .mic-pulse:nth-child(2) { animation-delay: 0.5s; }
+  @keyframes pulse {
+    0% { transform: scale(0.95); opacity: 0.7; }
+    100% { transform: scale(1.6); opacity: 0; }
+  }
+
+  .mic-btn {
+    position: relative;
+    width: 76px;
+    height: 76px;
+    border-radius: 50%;
+    background: var(--bg-elev);
+    border: 1px solid var(--border-strong);
+    color: var(--fg);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    z-index: 1;
+  }
+  .mic-btn:active {
+    transform: scale(0.94);
+  }
+  .listening .mic-btn {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--bg);
+    box-shadow: 0 0 40px var(--accent-glow);
+  }
+  .mic-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+  .mic-btn svg {
+    width: 28px;
+    height: 28px;
+  }
+
+  .text-fallback {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    max-width: 480px;
+  }
+  .text-fallback input {
+    flex: 1;
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    color: var(--fg);
+    font-family: var(--mono);
+    font-size: 13px;
+    padding: 10px 14px;
+    border-radius: 4px;
+    outline: none;
+  }
+  .text-fallback input:focus { border-color: var(--accent); }
+  .text-fallback button {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--fg-muted);
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 10px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    transition: all 0.18s ease;
+  }
+  .text-fallback button:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  /* ──── Settings sheet ─────────────────────────────── */
+  .sheet-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    z-index: 10;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+  }
+  .sheet-backdrop.open {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .sheet {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: var(--bg-elev);
+    border-top: 1px solid var(--border-strong);
+    border-radius: 16px 16px 0 0;
+    padding: 24px 24px calc(28px + env(safe-area-inset-bottom));
+    transform: translateY(100%);
+    transition: transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+    z-index: 11;
+    max-width: 720px;
+    margin: 0 auto;
+  }
+  .sheet.open { transform: translateY(0); }
+  .sheet h2 {
+    font-family: var(--serif);
+    font-style: italic;
+    font-weight: 400;
+    font-size: 24px;
+    margin-bottom: 18px;
+  }
+  .sheet label {
+    display: block;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--fg-muted);
+    margin-bottom: 8px;
+  }
+  .sheet input, .sheet select {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--fg);
+    font-family: var(--mono);
+    font-size: 14px;
+    padding: 12px 14px;
+    border-radius: 4px;
+    outline: none;
+    margin-bottom: 18px;
+  }
+  .sheet input:focus, .sheet select:focus { border-color: var(--accent); }
+  .sheet .hint {
+    font-size: 11px;
+    color: var(--fg-faint);
+    line-height: 1.6;
+    margin-bottom: 20px;
+  }
+  .sheet-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+  }
+  .sheet button {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--fg);
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 10px 20px;
+    border-radius: 4px;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+  .sheet button.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--bg);
+  }
+
+  /* ──── Mobile tweaks ──────────────────────────────── */
+  @media (max-width: 480px) {
+    header { padding: 18px 18px 12px; }
+    .wordmark { font-size: 26px; }
+    .conversation { padding: 18px; }
+    .controls { padding: 14px 18px 22px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="app" id="app">
+
+  <header>
+    <h1 class="wordmark">Jarvis</h1>
+    <div class="header-meta">
+      <span id="model-tag">haiku 4.5</span>
+      <button class="icon-btn" id="settings-btn" aria-label="Settings">⚙</button>
+    </div>
+  </header>
+
+  <div class="conversation" id="conversation">
+    <div class="empty-state" id="empty-state">
+      <div class="glyph">j</div>
+      <p>Tap the mic and ask anything.<br>Type below if speech isn't available.</p>
+    </div>
+  </div>
+
+  <div class="controls">
+    <div class="status-line" id="status">&nbsp;</div>
+    <div class="mic-wrap" id="mic-wrap">
+      <span class="mic-pulse"></span>
+      <span class="mic-pulse"></span>
+      <button class="mic-btn" id="mic-btn" aria-label="Speak">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="9" y="3" width="6" height="12" rx="3"/>
+          <path d="M5 11a7 7 0 0 0 14 0"/>
+          <line x1="12" y1="18" x2="12" y2="22"/>
+        </svg>
+      </button>
+    </div>
+    <div class="text-fallback">
+      <input id="text-input" type="text" placeholder="…or type here" autocomplete="off" autocapitalize="sentences" />
+      <button id="send-btn">Send</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- Settings sheet -->
+<div class="sheet-backdrop" id="sheet-backdrop"></div>
+<div class="sheet" id="sheet">
+  <h2>Settings</h2>
+  <label for="api-key-input">Anthropic API Key</label>
+  <input id="api-key-input" type="password" placeholder="sk-ant-…" autocomplete="off" />
+
+  <label for="model-select">Model</label>
+  <select id="model-select">
+    <option value="claude-haiku-4-5-20251001">Haiku 4.5 — fast, cheap</option>
+    <option value="claude-sonnet-4-6">Sonnet 4.6 — richer answers</option>
+  </select>
+
+  <p class="hint">
+    Stored locally in this browser. Set a spending cap in the Anthropic console.
+    <br><br>
+    Microphone needs HTTPS — make sure the page URL starts with <span style="color:var(--accent)">https://</span>.
+  </p>
+
+  <div class="sheet-actions">
+    <button id="clear-btn">Clear chat</button>
+    <button class="primary" id="sheet-done">Done</button>
+  </div>
+</div>
+
+<script>
+(() => {
+  // ────── State ──────────────────────────────────
+  const state = {
+    apiKey: localStorage.getItem('anthropic_api_key') || '',
+    model: localStorage.getItem('jarvis_model') || 'claude-haiku-4-5-20251001',
+    messages: [],
+    isListening: false,
+    isProcessing: false,
+    recognition: null,
+    finalTranscript: '',
+  };
+
+  // ────── DOM ────────────────────────────────────
+  const $ = (id) => document.getElementById(id);
+  const conversationEl = $('conversation');
+  const emptyStateEl = $('empty-state');
+  const micBtn = $('mic-btn');
+  const micWrap = $('mic-wrap');
+  const statusEl = $('status');
+  const textInput = $('text-input');
+  const sendBtn = $('send-btn');
+  const settingsBtn = $('settings-btn');
+  const sheet = $('sheet');
+  const sheetBackdrop = $('sheet-backdrop');
+  const sheetDone = $('sheet-done');
+  const clearBtn = $('clear-btn');
+  const apiKeyInput = $('api-key-input');
+  const modelSelect = $('model-select');
+  const modelTag = $('model-tag');
+
+  // ────── Settings sheet ────────────────────────
+  function openSheet() {
+    apiKeyInput.value = state.apiKey;
+    modelSelect.value = state.model;
+    sheet.classList.add('open');
+    sheetBackdrop.classList.add('open');
+  }
+  function closeSheet() {
+    sheet.classList.remove('open');
+    sheetBackdrop.classList.remove('open');
+    state.apiKey = apiKeyInput.value.trim();
+    state.model = modelSelect.value;
+    localStorage.setItem('anthropic_api_key', state.apiKey);
+    localStorage.setItem('jarvis_model', state.model);
+    updateModelTag();
+    updateButtons();
+  }
+  settingsBtn.addEventListener('click', openSheet);
+  sheetDone.addEventListener('click', closeSheet);
+  sheetBackdrop.addEventListener('click', closeSheet);
+  clearBtn.addEventListener('click', () => {
+    state.messages = [];
+    renderMessages();
+    closeSheet();
+  });
+
+  function updateModelTag() {
+    modelTag.textContent = state.model.includes('haiku') ? 'haiku 4.5' : 'sonnet 4.6';
+  }
+
+  function updateButtons() {
+    const ready = !!state.apiKey && !state.isProcessing;
+    micBtn.disabled = !ready;
+    sendBtn.disabled = !ready;
+    if (!state.apiKey) {
+      setStatus('Add your API key in settings.', '');
+    } else if (!state.isListening && !state.isProcessing) {
+      setStatus('', '');
+    }
+  }
+
+  // ────── Status ────────────────────────────────
+  function setStatus(text, kind = '') {
+    statusEl.textContent = text || '\u00A0';
+    statusEl.className = 'status-line' + (kind ? ' ' + kind : '');
+  }
+
+  // ────── Rendering ─────────────────────────────
+  function renderMessages() {
+    conversationEl.innerHTML = '';
+    if (state.messages.length === 0) {
+      conversationEl.appendChild(emptyStateEl);
+      return;
+    }
+    state.messages.forEach((msg) => {
+      const wrap = document.createElement('div');
+      wrap.className = 'message ' + msg.role;
+      const label = document.createElement('div');
+      label.className = 'label';
+      label.textContent = msg.role === 'user' ? 'you' : 'jarvis';
+      const bubble = document.createElement('div');
+      bubble.className = 'bubble';
+      bubble.textContent = msg.content;
+      wrap.appendChild(label);
+      wrap.appendChild(bubble);
+      conversationEl.appendChild(wrap);
+    });
+    if (state.isProcessing) {
+      const wrap = document.createElement('div');
+      wrap.className = 'message assistant';
+      const bubble = document.createElement('div');
+      bubble.className = 'bubble';
+      bubble.innerHTML = '<span class="thinking"><span class="dot"></span><span class="dot"></span><span class="dot"></span></span>';
+      wrap.appendChild(bubble);
+      conversationEl.appendChild(wrap);
+    }
+    conversationEl.scrollTop = conversationEl.scrollHeight;
+  }
+
+  // ────── Speech recognition ────────────────────
+  function buildRecognition() {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) return null;
+    const r = new SR();
+    r.continuous = false;
+    r.interimResults = true;
+    r.lang = 'en-US';
+
+    r.onresult = (e) => {
+      let interim = '';
+      let final = '';
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const t = e.results[i][0].transcript;
+        if (e.results[i].isFinal) final += t;
+        else interim += t;
+      }
+      if (final) state.finalTranscript += final;
+      setStatus((state.finalTranscript + interim).trim() || 'listening…', 'live');
+    };
+
+    r.onerror = (e) => {
+      console.warn('Recognition error:', e.error);
+      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+        setStatus('Microphone permission denied.', 'error');
+      } else if (e.error === 'no-speech') {
+        setStatus('No speech detected.', '');
+      } else if (e.error !== 'aborted') {
+        setStatus('Recognition error: ' + e.error, 'error');
+      }
+    };
+
+    r.onend = () => {
+      const transcript = state.finalTranscript.trim();
+      state.isListening = false;
+      micWrap.classList.remove('listening');
+      if (transcript) {
+        ask(transcript);
+      } else {
+        setStatus('', '');
+      }
+    };
+
+    return r;
+  }
+
+  function startListening() {
+    if (!state.recognition) state.recognition = buildRecognition();
+    if (!state.recognition) {
+      setStatus('Speech recognition not supported in this browser.', 'error');
+      return;
+    }
+    state.finalTranscript = '';
+    state.isListening = true;
+    micWrap.classList.add('listening');
+    setStatus('listening…', 'live');
+    try {
+      state.recognition.start();
+    } catch (err) {
+      // Already started, ignore
+      console.warn(err);
+    }
+  }
+
+  function stopListening() {
+    if (state.recognition && state.isListening) {
+      state.recognition.stop();
+    }
+  }
+
+  micBtn.addEventListener('click', () => {
+    if (state.isProcessing) return;
+    if (state.isListening) stopListening();
+    else startListening();
+  });
+
+  // ────── Text fallback ─────────────────────────
+  sendBtn.addEventListener('click', () => {
+    const v = textInput.value.trim();
+    if (!v) return;
+    textInput.value = '';
+    ask(v);
+  });
+  textInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') sendBtn.click();
+  });
+
+  // ────── Speech synthesis ──────────────────────
+  let cachedVoice = null;
+  function pickVoice() {
+    if (cachedVoice) return cachedVoice;
+    const voices = window.speechSynthesis.getVoices();
+    // Prefer enhanced/premium English voices on iOS
+    cachedVoice =
+      voices.find((v) => /en[-_](US|GB)/i.test(v.lang) && /enhanced|premium|siri/i.test(v.name)) ||
+      voices.find((v) => /en[-_](US|GB)/i.test(v.lang)) ||
+      voices[0];
+    return cachedVoice;
+  }
+  // iOS loads voices asynchronously
+  if ('speechSynthesis' in window) {
+    window.speechSynthesis.onvoiceschanged = () => { cachedVoice = null; pickVoice(); };
+  }
+
+  function speak(text) {
+    if (!('speechSynthesis' in window)) return;
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    const v = pickVoice();
+    if (v) u.voice = v;
+    u.rate = 1.0;
+    u.pitch = 1.0;
+    window.speechSynthesis.speak(u);
+  }
+
+  // ────── Ask Claude ────────────────────────────
+  async function ask(prompt) {
+    if (!state.apiKey) {
+      setStatus('Set your API key in settings.', 'error');
+      return;
+    }
+
+    state.messages.push({ role: 'user', content: prompt });
+    state.isProcessing = true;
+    updateButtons();
+    setStatus('thinking…', '');
+    renderMessages();
+
+    try {
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-api-key': state.apiKey,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true',
+        },
+        body: JSON.stringify({
+          model: state.model,
+          max_tokens: 512,
+          system:
+            "You are Jarvis, a concise voice assistant on an iPad. " +
+            "Keep replies short — 1 to 3 sentences — because they will be spoken aloud. " +
+            "Be direct, friendly, and skip filler.",
+          messages: state.messages.map((m) => ({ role: m.role, content: m.content })),
+        }),
+      });
+
+      if (!res.ok) {
+        const errBody = await res.text();
+        throw new Error(`HTTP ${res.status}: ${errBody}`);
+      }
+
+      const data = await res.json();
+      const reply = (data.content || [])
+        .filter((b) => b.type === 'text')
+        .map((b) => b.text)
+        .join(' ')
+        .trim();
+
+      state.messages.push({ role: 'assistant', content: reply });
+      setStatus('', '');
+      speak(reply);
+    } catch (err) {
+      console.error(err);
+      setStatus('Error: ' + (err.message || 'unknown'), 'error');
+      state.messages.push({
+        role: 'assistant',
+        content: '⚠ Could not reach Claude. Check your key and connection.',
+      });
+    } finally {
+      state.isProcessing = false;
+      updateButtons();
+      renderMessages();
+    }
+  }
+
+  // ────── Init ──────────────────────────────────
+  updateModelTag();
+  updateButtons();
+  renderMessages();
+
+  // Register service worker for offline shell
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('service-worker.js').catch(() => {});
+  }
+})();
+</script>
+
+</body>
+</html>
