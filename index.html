@@ -497,6 +497,17 @@
     <option value="claude-sonnet-4-6">Sonnet 4.6 — richer answers</option>
   </select>
 
+  <label for="language-select">Voice language</label>
+  <select id="language-select">
+    <option value="de">Deutsch</option>
+    <option value="en">English</option>
+    <option value="es">Español</option>
+    <option value="fr">Français</option>
+    <option value="it">Italiano</option>
+    <option value="nl">Nederlands</option>
+    <option value="auto">Auto-detect (TTS may sound off)</option>
+  </select>
+
   <p class="hint">
     Keys stored locally in this browser only. Get a free Groq key at
     <span style="color:var(--accent)">console.groq.com</span> — needed because iOS Safari's
@@ -518,6 +529,7 @@
     apiKey: localStorage.getItem('anthropic_api_key') || '',
     groqKey: localStorage.getItem('groq_api_key') || '',
     model: localStorage.getItem('jarvis_model') || 'claude-haiku-4-5-20251001',
+    language: localStorage.getItem('jarvis_language') || 'de',
     messages: [],
     isListening: false,
     isProcessing: false,
@@ -545,6 +557,7 @@
   const apiKeyInput = $('api-key-input');
   const groqKeyInput = $('groq-key-input');
   const modelSelect = $('model-select');
+  const languageSelect = $('language-select');
   const modelTag = $('model-tag');
 
   // ────── Settings sheet ────────────────────────
@@ -552,6 +565,7 @@
     apiKeyInput.value = state.apiKey;
     groqKeyInput.value = state.groqKey;
     modelSelect.value = state.model;
+    languageSelect.value = state.language;
     sheet.classList.add('open');
     sheetBackdrop.classList.add('open');
   }
@@ -561,9 +575,12 @@
     state.apiKey = apiKeyInput.value.trim();
     state.groqKey = groqKeyInput.value.trim();
     state.model = modelSelect.value;
+    state.language = languageSelect.value;
     localStorage.setItem('anthropic_api_key', state.apiKey);
     localStorage.setItem('groq_api_key', state.groqKey);
     localStorage.setItem('jarvis_model', state.model);
+    localStorage.setItem('jarvis_language', state.language);
+    cachedVoice = null;  // re-pick voice for new language
     updateModelTag();
     updateButtons();
   }
@@ -722,6 +739,9 @@
       form.append('model', 'whisper-large-v3-turbo');
       form.append('response_format', 'json');
       form.append('temperature', '0');
+      if (state.language && state.language !== 'auto') {
+        form.append('language', state.language);
+      }
 
       const res = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
         method: 'POST',
@@ -749,7 +769,8 @@
     const r = new SR();
     r.continuous = false;
     r.interimResults = true;
-    r.lang = 'en-US';
+    const langMap = { de: 'de-DE', en: 'en-US', es: 'es-ES', fr: 'fr-FR', it: 'it-IT', nl: 'nl-NL' };
+    r.lang = langMap[state.language] || 'en-US';
 
     r.onresult = (e) => {
       let interim = '';
@@ -835,10 +856,12 @@
   function pickVoice() {
     if (cachedVoice) return cachedVoice;
     const voices = window.speechSynthesis.getVoices();
-    // Prefer enhanced/premium English voices on iOS
+    const lang = state.language === 'auto' ? 'en' : state.language;
+    const matching = voices.filter((v) => v.lang.toLowerCase().startsWith(lang.toLowerCase()));
     cachedVoice =
-      voices.find((v) => /en[-_](US|GB)/i.test(v.lang) && /enhanced|premium|siri/i.test(v.name)) ||
-      voices.find((v) => /en[-_](US|GB)/i.test(v.lang)) ||
+      matching.find((v) => /enhanced|premium|siri/i.test(v.name)) ||
+      matching[0] ||
+      voices.find((v) => v.lang.toLowerCase().startsWith('en')) ||
       voices[0];
     return cachedVoice;
   }
@@ -852,7 +875,10 @@
     window.speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text);
     const v = pickVoice();
-    if (v) u.voice = v;
+    if (v) {
+      u.voice = v;
+      u.lang = v.lang;
+    }
     u.rate = 1.0;
     u.pitch = 1.0;
     window.speechSynthesis.speak(u);
@@ -885,6 +911,7 @@
           max_tokens: 512,
           system:
             "You are Jarvis, a concise voice assistant on an iPad. " +
+            "Always reply in the same language the user wrote/spoke to you in. " +
             "Keep replies short — 1 to 3 sentences — because they will be spoken aloud. " +
             "Be direct, friendly, and skip filler.",
           messages: state.messages.map((m) => ({ role: m.role, content: m.content })),
