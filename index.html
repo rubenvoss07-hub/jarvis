@@ -488,6 +488,9 @@
   <label for="api-key-input">Anthropic API Key</label>
   <input id="api-key-input" type="password" placeholder="sk-ant-…" autocomplete="off" />
 
+  <label for="groq-key-input">Groq API Key <span style="color:var(--fg-faint);text-transform:none;letter-spacing:0">(for voice on iPad)</span></label>
+  <input id="groq-key-input" type="password" placeholder="gsk_…" autocomplete="off" />
+
   <label for="model-select">Model</label>
   <select id="model-select">
     <option value="claude-haiku-4-5-20251001">Haiku 4.5 — fast, cheap</option>
@@ -495,9 +498,11 @@
   </select>
 
   <p class="hint">
-    Stored locally in this browser. Set a spending cap in the Anthropic console.
-    <br><br>
-    Microphone needs HTTPS — make sure the page URL starts with <span style="color:var(--accent)">https://</span>.
+    Keys stored locally in this browser only. Get a free Groq key at
+    <span style="color:var(--accent)">console.groq.com</span> — needed because iOS Safari's
+    speech recognition is broken. With Groq set, your voice is recorded and transcribed by
+    Whisper instead. Without it, the app falls back to the browser's built-in recognition
+    (works on desktop, not on iPad).
   </p>
 
   <div class="sheet-actions">
@@ -511,12 +516,16 @@
   // ────── State ──────────────────────────────────
   const state = {
     apiKey: localStorage.getItem('anthropic_api_key') || '',
+    groqKey: localStorage.getItem('groq_api_key') || '',
     model: localStorage.getItem('jarvis_model') || 'claude-haiku-4-5-20251001',
     messages: [],
     isListening: false,
     isProcessing: false,
     recognition: null,
     finalTranscript: '',
+    mediaRecorder: null,
+    audioChunks: [],
+    micStream: null,
   };
 
   // ────── DOM ────────────────────────────────────
@@ -534,12 +543,14 @@
   const sheetDone = $('sheet-done');
   const clearBtn = $('clear-btn');
   const apiKeyInput = $('api-key-input');
+  const groqKeyInput = $('groq-key-input');
   const modelSelect = $('model-select');
   const modelTag = $('model-tag');
 
   // ────── Settings sheet ────────────────────────
   function openSheet() {
     apiKeyInput.value = state.apiKey;
+    groqKeyInput.value = state.groqKey;
     modelSelect.value = state.model;
     sheet.classList.add('open');
     sheetBackdrop.classList.add('open');
@@ -548,8 +559,10 @@
     sheet.classList.remove('open');
     sheetBackdrop.classList.remove('open');
     state.apiKey = apiKeyInput.value.trim();
+    state.groqKey = groqKeyInput.value.trim();
     state.model = modelSelect.value;
     localStorage.setItem('anthropic_api_key', state.apiKey);
+    localStorage.setItem('groq_api_key', state.groqKey);
     localStorage.setItem('jarvis_model', state.model);
     updateModelTag();
     updateButtons();
@@ -616,7 +629,120 @@
     conversationEl.scrollTop = conversationEl.scrollHeight;
   }
 
-  // ────── Speech recognition ────────────────────
+  // ────── Speech: MediaRecorder + Groq Whisper (works on iPad) ──
+  function pickMime() {
+    const candidates = ['audio/mp4', 'audio/webm;codecs=opus', 'audio/webm', 'audio/ogg'];
+    for (const m of candidates) {
+      if (window.MediaRecorder && MediaRecorder.isTypeSupported(m)) return m;
+    }
+    return '';
+  }
+
+  async function startRecording() {
+    try {
+      state.micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch (err) {
+      console.error('Mic error:', err);
+      setStatus('Microphone permission denied or unavailable.', 'error');
+      return false;
+    }
+
+    const mimeType = pickMime();
+    try {
+      state.mediaRecorder = new MediaRecorder(
+        state.micStream,
+        mimeType ? { mimeType } : undefined
+      );
+    } catch (err) {
+      console.error('MediaRecorder error:', err);
+      setStatus('Recording not supported on this browser.', 'error');
+      stopMicStream();
+      return false;
+    }
+
+    state.audioChunks = [];
+
+    state.mediaRecorder.ondataavailable = (e) => {
+      if (e.data && e.data.size > 0) state.audioChunks.push(e.data);
+    };
+
+    state.mediaRecorder.onstop = async () => {
+      const type = mimeType || 'audio/mp4';
+      const blob = new Blob(state.audioChunks, { type });
+      stopMicStream();
+
+      if (blob.size < 800) {
+        // Too short — almost certainly silence
+        setStatus('Didn\u2019t catch that.', '');
+        return;
+      }
+
+      setStatus('transcribing\u2026', '');
+      const text = await transcribeWithGroq(blob, type);
+      if (text) {
+        ask(text);
+      } else {
+        setStatus('', '');
+      }
+    };
+
+    state.mediaRecorder.start();
+    state.isListening = true;
+    micWrap.classList.add('listening');
+    setStatus('recording\u2026 tap to send', 'live');
+    return true;
+  }
+
+  function stopRecording() {
+    if (state.mediaRecorder && state.mediaRecorder.state !== 'inactive') {
+      state.mediaRecorder.stop();
+    }
+    state.isListening = false;
+    micWrap.classList.remove('listening');
+  }
+
+  function stopMicStream() {
+    if (state.micStream) {
+      state.micStream.getTracks().forEach((t) => t.stop());
+      state.micStream = null;
+    }
+  }
+
+  async function transcribeWithGroq(blob, mimeType) {
+    if (!state.groqKey) {
+      setStatus('Add a Groq API key in settings to use voice on iPad.', 'error');
+      return '';
+    }
+    try {
+      const ext = mimeType.includes('mp4') ? 'm4a' :
+                  mimeType.includes('webm') ? 'webm' :
+                  mimeType.includes('ogg') ? 'ogg' : 'm4a';
+      const form = new FormData();
+      form.append('file', blob, `audio.${ext}`);
+      form.append('model', 'whisper-large-v3-turbo');
+      form.append('response_format', 'json');
+      form.append('temperature', '0');
+
+      const res = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${state.groqKey}` },
+        body: form,
+      });
+
+      if (!res.ok) {
+        const t = await res.text();
+        throw new Error(`Groq HTTP ${res.status}: ${t}`);
+      }
+      const data = await res.json();
+      return (data.text || '').trim();
+    } catch (err) {
+      console.error(err);
+      setStatus('Transcription error: ' + err.message, 'error');
+      return '';
+    }
+  }
+
+  // ────── Speech: webkit fallback (desktop only) ────────────────
   function buildRecognition() {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) return null;
@@ -634,16 +760,14 @@
         else interim += t;
       }
       if (final) state.finalTranscript += final;
-      setStatus((state.finalTranscript + interim).trim() || 'listening…', 'live');
+      setStatus((state.finalTranscript + interim).trim() || 'listening\u2026', 'live');
     };
 
     r.onerror = (e) => {
       console.warn('Recognition error:', e.error);
       if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
         setStatus('Microphone permission denied.', 'error');
-      } else if (e.error === 'no-speech') {
-        setStatus('No speech detected.', '');
-      } else if (e.error !== 'aborted') {
+      } else if (e.error !== 'aborted' && e.error !== 'no-speech') {
         setStatus('Recognition error: ' + e.error, 'error');
       }
     };
@@ -652,44 +776,47 @@
       const transcript = state.finalTranscript.trim();
       state.isListening = false;
       micWrap.classList.remove('listening');
-      if (transcript) {
-        ask(transcript);
-      } else {
-        setStatus('', '');
-      }
+      if (transcript) ask(transcript);
+      else setStatus('', '');
     };
 
     return r;
   }
 
-  function startListening() {
+  function startWebkitRecognition() {
     if (!state.recognition) state.recognition = buildRecognition();
     if (!state.recognition) {
-      setStatus('Speech recognition not supported in this browser.', 'error');
+      setStatus('Browser speech recognition unavailable. Add a Groq key in settings.', 'error');
       return;
     }
     state.finalTranscript = '';
     state.isListening = true;
     micWrap.classList.add('listening');
-    setStatus('listening…', 'live');
-    try {
-      state.recognition.start();
-    } catch (err) {
-      // Already started, ignore
-      console.warn(err);
-    }
+    setStatus('listening\u2026', 'live');
+    try { state.recognition.start(); } catch (err) { console.warn(err); }
   }
 
-  function stopListening() {
-    if (state.recognition && state.isListening) {
-      state.recognition.stop();
-    }
+  function stopWebkitRecognition() {
+    if (state.recognition && state.isListening) state.recognition.stop();
   }
 
-  micBtn.addEventListener('click', () => {
+  // ────── Mic button: pick the right path ──────────────────────
+  // If a Groq key is set, always use MediaRecorder + Whisper (works everywhere).
+  // Otherwise fall back to the browser API (works on Chrome/Edge desktop only).
+  micBtn.addEventListener('click', async () => {
     if (state.isProcessing) return;
-    if (state.isListening) stopListening();
-    else startListening();
+
+    if (state.isListening) {
+      if (state.groqKey) stopRecording();
+      else stopWebkitRecognition();
+      return;
+    }
+
+    if (state.groqKey) {
+      await startRecording();
+    } else {
+      startWebkitRecognition();
+    }
   });
 
   // ────── Text fallback ─────────────────────────
