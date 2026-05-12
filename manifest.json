@@ -1,21 +1,21 @@
 {
-  "name": "Jarvis",
-  "short_name": "Jarvis",
-  "description": "Voice assistant powered by Claude",
+  "name": "JARVIS",
+  "short_name": "JARVIS",
+  "description": "Neural voice interface powered by Claude",
   "start_url": "./index.html",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#0a0a0b",
-  "theme_color": "#0a0a0b",
+  "background_color": "#05050a",
+  "theme_color": "#05050a",
   "icons": [
     {
-      "src": "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect width='192' height='192' rx='42' fill='%230a0a0b'/><circle cx='96' cy='96' r='40' fill='none' stroke='%23d4ff3a' stroke-width='3'/><circle cx='96' cy='96' r='9' fill='%23d4ff3a'/><text x='96' y='160' font-family='serif' font-size='24' font-style='italic' fill='%23f5f3ed' text-anchor='middle'>j</text></svg>",
+      "src": "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect width='192' height='192' rx='42' fill='%2305050a'/><circle cx='96' cy='96' r='76' fill='none' stroke='%2300d4ff' stroke-width='1' opacity='0.35'/><circle cx='96' cy='96' r='63' fill='none' stroke='%2300d4ff' stroke-width='1' opacity='0.65'/><circle cx='96' cy='96' r='70' fill='none' stroke='%2300ffcc' stroke-width='1' stroke-dasharray='7 5' opacity='0.3'/><path d='M18 18L30 18M18 18L18 30' stroke='%2300d4ff' stroke-width='2' opacity='0.6' fill='none'/><path d='M174 18L162 18M174 18L174 30' stroke='%2300d4ff' stroke-width='2' opacity='0.6' fill='none'/><path d='M18 174L30 174M18 174L18 162' stroke='%2300d4ff' stroke-width='2' opacity='0.6' fill='none'/><path d='M174 174L162 174M174 174L174 162' stroke='%2300d4ff' stroke-width='2' opacity='0.6' fill='none'/><text x='96' y='120' font-family='Arial Black,system-ui' font-size='80' font-weight='900' fill='%23ffffff' text-anchor='middle' opacity='0.93'>J</text></svg>",
       "sizes": "192x192",
       "type": "image/svg+xml",
       "purpose": "any"
     },
     {
-      "src": "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><rect width='512' height='512' rx='112' fill='%230a0a0b'/><circle cx='256' cy='256' r='108' fill='none' stroke='%23d4ff3a' stroke-width='8'/><circle cx='256' cy='256' r='24' fill='%23d4ff3a'/><text x='256' y='428' font-family='serif' font-size='64' font-style='italic' fill='%23f5f3ed' text-anchor='middle'>j</text></svg>",
+      "src": "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><rect width='512' height='512' rx='112' fill='%2305050a'/><circle cx='256' cy='256' r='204' fill='none' stroke='%2300d4ff' stroke-width='2' opacity='0.35'/><circle cx='256' cy='256' r='168' fill='none' stroke='%2300d4ff' stroke-width='2' opacity='0.65'/><circle cx='256' cy='256' r='186' fill='none' stroke='%2300ffcc' stroke-width='1.5' stroke-dasharray='18 14' opacity='0.3'/><path d='M42 42L82 42M42 42L42 82' stroke='%2300d4ff' stroke-width='4' opacity='0.6' fill='none'/><path d='M470 42L430 42M470 42L470 82' stroke='%2300d4ff' stroke-width='4' opacity='0.6' fill='none'/><path d='M42 470L82 470M42 470L42 430' stroke='%2300d4ff' stroke-width='4' opacity='0.6' fill='none'/><path d='M470 470L430 470M470 470L470 430' stroke='%2300d4ff' stroke-width='4' opacity='0.6' fill='none'/><text x='256' y='320' font-family='Arial Black,system-ui' font-size='220' font-weight='900' fill='%23ffffff' text-anchor='middle' opacity='0.93'>J</text></svg>",
       "sizes": "512x512",
       "type": "image/svg+xml",
       "purpose": "any"

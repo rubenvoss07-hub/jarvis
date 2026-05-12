@@ -2,7 +2,7 @@
 // Always tries the network so deployed changes show up immediately,
 // falls back to cache only when offline.
 
-const CACHE = 'jarvis-shell-v2';
+const CACHE = 'jarvis-shell-v3';
 
 self.addEventListener('install', (event) => {
   // Take over immediately — don't wait for old tabs to close.
