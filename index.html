@@ -1289,6 +1289,7 @@ const state = {
   mediaRecorder: null,
   chunks: [],
   stream: null,
+  mimeType: '',
   history: [],   // {role, content}
   settings: {
     anthropic_api_key: localStorage.getItem('anthropic_api_key') || '',
@@ -1614,7 +1615,13 @@ async function startRecording() {
   }
   try {
     state.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    const mr = new MediaRecorder(state.stream);
+    // iOS Safari produces audio/mp4, desktop produces audio/webm — detect correctly.
+    const mimeType = ['audio/mp4', 'audio/webm;codecs=opus', 'audio/webm', 'audio/ogg']
+      .find(m => MediaRecorder.isTypeSupported(m)) || '';
+    const mr = mimeType
+      ? new MediaRecorder(state.stream, { mimeType })
+      : new MediaRecorder(state.stream);
+    state.mimeType = mr.mimeType || mimeType || 'audio/mp4';
     state.mediaRecorder = mr;
     state.chunks = [];
     mr.ondataavailable = (e) => { if (e.data && e.data.size) state.chunks.push(e.data); };
@@ -1640,7 +1647,7 @@ function stopRecording() {
 async function onRecordingStop() {
   setState('processing');
   setLive('TRANSCRIBING AUDIO');
-  const blob = new Blob(state.chunks, { type: 'audio/webm' });
+  const blob = new Blob(state.chunks, { type: state.mimeType || 'audio/mp4' });
 
   try {
     const transcript = await transcribeAudio(blob);
@@ -1668,8 +1675,12 @@ async function onRecordingStop() {
 }
 
 async function transcribeAudio(blob) {
+  const mime = state.mimeType || 'audio/mp4';
+  const ext = mime.includes('mp4') ? 'm4a'
+             : mime.includes('webm') ? 'webm'
+             : mime.includes('ogg') ? 'ogg' : 'm4a';
   const form = new FormData();
-  form.append('file', blob, 'audio.webm');
+  form.append('file', blob, `audio.${ext}`);
   form.append('model', 'whisper-large-v3');
   // language hint
   const lang = (state.settings.jarvis_language || 'en-US').split('-')[0];
